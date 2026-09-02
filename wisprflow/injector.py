@@ -47,28 +47,30 @@ def _run(cmd, **kw):
 
 def _get_active_window_class_x11() -> str | None:
     if shutil.which("xdotool"):
-        for args in [
-            ["xdotool", "getactivewindow", "getwindowclassname"],
-            ["xdotool", "getactivewindow", "getwindowname"],
-        ]:
-            r = _run(args)
-            if r and r.returncode == 0:
-                out = r.stdout.decode("utf-8", errors="ignore").strip()
-                if out:
-                    return out
+        # Resolve the window id first. Some distro builds do not support
+        # xdotool's getwindowclassname command, and a window title is not a
+        # reliable indication that the focused application is a terminal.
+        r = _run(["xdotool", "getactivewindow"])
+        if not r or r.returncode != 0:
+            return None
+        wid = r.stdout.decode("utf-8", errors="ignore").strip()
+
         if shutil.which("xprop"):
             try:
-                r = _run(["xdotool", "getactivewindow"])
-                if r and r.returncode == 0:
-                    wid = r.stdout.decode().strip()
-                    r2 = _run(["xprop", "-id", wid, "WM_CLASS"])
-                    if r2 and r2.returncode == 0:
-                        out = r2.stdout.decode()
-                        m = re.search(r'"([^"]+)"', out)
-                        if m:
-                            return m.group(1)
+                r2 = _run(["xprop", "-id", wid, "WM_CLASS"])
+                if r2 and r2.returncode == 0:
+                    values = re.findall(r'"([^"]+)"', r2.stdout.decode("utf-8", errors="ignore"))
+                    if values:
+                        return " ".join(values)
             except Exception:
                 pass
+
+        # Fall back to the title only when WM_CLASS cannot be read.
+        r3 = _run(["xdotool", "getwindowname", wid])
+        if r3 and r3.returncode == 0:
+            title = r3.stdout.decode("utf-8", errors="ignore").strip()
+            if title:
+                return title
     return None
 
 def _get_active_window_class_wayland() -> str | None:

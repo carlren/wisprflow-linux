@@ -451,6 +451,21 @@ class Daemon:
             print(f"[wispr] hotkey {hk_norm} pressed via {source} -> toggle")
             threading.Thread(target=self.toggle, daemon=True).start()
 
+        # On X11, use a passive root-window grab for shortcuts that contain a
+        # regular key. Unlike pynput's observer, this consumes the keystroke so
+        # Alt+Z does not also type a literal "z" into the focused application.
+        try:
+            from .hotkey import X11GrabHotkey
+            x11_listener = X11GrabHotkey(hk, lambda: on_activate("X11Grab"))
+            if x11_listener.start():
+                self._hotkey_listener = x11_listener
+                self._hotkey_listeners.append(x11_listener)
+                print(f"[wispr] hotkey listener active (consuming X11 grab): {hk_norm}")
+                print(f"[wispr] hotkey ready — press {hk.upper() if hk.lower().startswith('f') else hk} to toggle (also `wisprflow toggle` works)")
+                return
+        except Exception as e:
+            print(f"[wispr] consuming X11 hotkey unavailable, using listener fallback: {e}")
+
         # Decide listener strategy: single F-keys → Listener only (more reliable, avoids double-fire); combos → GlobalHotKeys
         # Special case: left shift+z should use a left-shift-aware Listener to honor "left shift + z" and avoid right-shift false triggers, plus GlobalHotKeys as fallback
         target_key = None
