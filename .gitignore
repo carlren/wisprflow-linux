@@ -1,0 +1,39 @@
+# Python caches and generated package metadata
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments and local tooling
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Credentials and machine-local configuration
+.env
+.env.*
+!.env.example
+config.json
+*.key
+*.pem
+
+# Recorded audio and runtime state
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.opus
+*.m4a
+*.webm
+*.mp4
+*.sock
+*.pid
+.cache/
+
+# Editor and manual backup files
+*~
+*.bak
+*.bak-*
