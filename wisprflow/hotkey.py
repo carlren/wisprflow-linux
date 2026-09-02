@@ -78,6 +78,20 @@ def parse_x11_hotkey(hotkey: str):
     return key_names[0], modifiers
 
 
+def _matching_key_event_type(event, keycode, key_press_type, key_release_type):
+    """Return the event type only for a matching keyboard event.
+
+    X11 sends other event types over the same display connection.  Those
+    events do not necessarily expose the keyboard-only ``detail`` field.
+    """
+    event_type = getattr(event, "type", None)
+    if event_type not in (key_press_type, key_release_type):
+        return None
+    if getattr(event, "detail", None) != keycode:
+        return None
+    return event_type
+
+
 class X11GrabHotkey:
     """Consume a global X11 shortcut using a passive root-window grab."""
 
@@ -140,12 +154,18 @@ class X11GrabHotkey:
             while not self._stop_event.is_set():
                 while self._display.pending_events():
                     event = self._display.next_event()
-                    if event.detail != self._keycode:
+                    event_type = _matching_key_event_type(
+                        event,
+                        self._keycode,
+                        X.KeyPress,
+                        X.KeyRelease,
+                    )
+                    if event_type is None:
                         continue
-                    if event.type == X.KeyRelease:
+                    if event_type == X.KeyRelease:
                         self._pressed = False
                     elif (
-                        event.type == X.KeyPress
+                        event_type == X.KeyPress
                         and not self._pressed
                         and event.state & relevant_modifiers == self._modifier_mask
                     ):

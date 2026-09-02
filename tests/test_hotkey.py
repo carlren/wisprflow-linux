@@ -2,7 +2,15 @@ import unittest
 
 from Xlib import X
 
-from wisprflow.hotkey import parse_x11_hotkey
+from wisprflow.hotkey import _matching_key_event_type, parse_x11_hotkey
+
+
+class NonKeyEvent:
+    type = 99
+
+    @property
+    def detail(self):
+        raise AssertionError("detail must not be read for a non-key event")
 
 
 class X11HotkeyParsingTest(unittest.TestCase):
@@ -20,6 +28,9 @@ class X11HotkeyParsingTest(unittest.TestCase):
 
     def test_unknown_key_uses_fallback(self):
         self.assertIsNone(parse_x11_hotkey("alt+not-a-real-key"))
+
+    def test_non_key_x11_event_is_ignored_before_reading_detail(self):
+        self.assertIsNone(_matching_key_event_type(NonKeyEvent(), 52, 2, 3))
 
 
 if __name__ == "__main__":
