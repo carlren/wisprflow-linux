@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=WisprFlow
+Comment=Push-to-talk speech-to-text (OpenRouter)
+Exec=/home/carlren/.local/bin/wisprflow daemon
+Icon=audio-input-microphone
+Terminal=false
+Type=Application
+Categories=Utility;Audio;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+Keywords=speech;stt;transcription;wispr;voice;
