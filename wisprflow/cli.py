@@ -329,7 +329,7 @@ def cmd_test_mic(args):
 
 def cmd_install_hotkey(args):
     # helper to create GNOME custom keybinding via gsettings
-    hotkey = args.hotkey or load_config().get("hotkey", "f9")
+    hotkey = args.hotkey or load_config().get("hotkey", "ctrl+shift")
     # Map F9 -> F9, but gsettings expects <Primary> etc; F keys are just "F9"
     gsettings_hotkey = hotkey
     # Try to add custom keybinding
@@ -412,13 +412,13 @@ def build_parser():
     sp.add_argument("--hotkey", help="key, default from config")
     sp.set_defaults(func=cmd_install_hotkey)
 
-    sp = sub.add_parser("listen-keys", help="debug: listen for hotkey presses (press F9 to test, Ctrl+C to exit)")
+    sp = sub.add_parser("listen-keys", help="debug: listen for the configured hotkey (Ctrl+C to exit)")
     sp.add_argument("--hotkey", help="hotkey to watch, default from config")
     sp.add_argument("--seconds", type=int, default=10, help="seconds to listen")
     def _listen_keys(args):
         from .config import load_config
         cfg = load_config()
-        hk = (args.hotkey or cfg.get("hotkey") or "f9").lower()
+        hk = (args.hotkey or cfg.get("hotkey") or "ctrl+shift").lower()
         print(f"Listening for hotkey {hk!r} for {args.seconds}s — press it now (Ctrl+C to exit)...")
         print(f"Config hotkey: {cfg.get('hotkey')}  XDG_SESSION_TYPE={__import__('os').environ.get('XDG_SESSION_TYPE')} DISPLAY={__import__('os').environ.get('DISPLAY')}")
         try:

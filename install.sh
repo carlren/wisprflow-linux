@@ -51,7 +51,7 @@ echo
 echo "[5/5] Checking config..."
 mkdir -p ~/.config/wisprflow
 if [ ! -f ~/.config/wisprflow/config.json ]; then
-  echo '{"api_key":"","model":"openai/gpt-4o-transcribe","language":null,"hotkey":"f9","sample_rate":16000,"channels":1,"auto_paste":true,"overlay_enabled":true}' > ~/.config/wisprflow/config.json
+  echo '{"api_key":"","model":"openai/gpt-4o-transcribe","language":null,"hotkey":"ctrl+shift","sample_rate":16000,"channels":1,"auto_paste":true,"overlay_enabled":true,"sound_enabled":true,"max_record_seconds":0,"vad_enabled":true,"vad_silence_ms":180000}' > ~/.config/wisprflow/config.json
   chmod 600 ~/.config/wisprflow/config.json
   echo "Created ~/.config/wisprflow/config.json (chmod 600)"
 fi
@@ -63,11 +63,11 @@ echo "Next steps:"
 echo "  1. wisprflow config --api-key sk-or-v1-...   # from https://openrouter.ai/keys"
 echo "  2. wisprflow diagnose                         # check mic, clipboard, deps"
 echo "  3. wisprflow daemon &                         # run once to test"
-echo "  4. Press F9, speak, press F9 again -> text at cursor"
+echo "  4. Press Ctrl+Shift, speak, press it again -> text at cursor"
 echo
 echo "For Wayland/GNOME, bind a shortcut:"
 echo "  Settings -> Keyboard -> Custom Shortcuts -> +"
-echo "  Name: Wispr Toggle   Command: $HOME/.local/bin/wisprflow toggle   Shortcut: F9"
+echo "  Name: Wispr Toggle   Command: wisprflow toggle   Shortcut: Ctrl+Shift"
 echo
 echo "Or run: wisprflow install-hotkey"
 echo

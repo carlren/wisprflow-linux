@@ -387,7 +387,7 @@ class Daemon:
 
     def _setup_hotkey(self):
         # Try pynput global hotkey; may fail on Wayland or without X
-        hk = (self.cfg.get("hotkey") or "shift+z").lower().strip()
+        hk = (self.cfg.get("hotkey") or "ctrl+shift").lower().strip()
         # Map "f9" -> <f9>, "ctrl+shift+space" etc? pynput uses <f9> syntax
         # Simple: if hk is like "f9" or "f8", wrap in <>
         # If hk contains "+", split
@@ -593,7 +593,7 @@ class Daemon:
             else:
                 # reload from file
                 self.cfg = load_config()
-                new_hotkey = (self.cfg.get("hotkey") or "f9").strip().lower()
+                new_hotkey = (self.cfg.get("hotkey") or "ctrl+shift").strip().lower()
                 print(f"[wispr] reload_hotkey from config -> {new_hotkey!r}")
             # stop old listeners
             old = list(getattr(self, '_hotkey_listeners', []) or [])

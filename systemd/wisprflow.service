@@ -9,10 +9,6 @@ ExecStart=%h/.local/bin/wisprflow daemon
 Restart=on-failure
 RestartSec=2
 Environment=PYTHONUNBUFFERED=1
-# Ensure display env is passed through (systemd --user does this, but be explicit)
-Environment=DISPLAY=:1
-Environment=XDG_SESSION_TYPE=x11
-Environment=XAUTHORITY=/run/user/1000/gdm/Xauthority
 # Uncomment if you keep API key in env instead of config file:
 # EnvironmentFile=%h/.config/wisprflow/env
 

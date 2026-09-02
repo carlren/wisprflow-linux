@@ -45,10 +45,10 @@ class OverlayFallback:
         self._hotkey_cb = hotkey_reload_callback
     def set_toggle_callback(self, cb): pass
     def set_hotkey_reload_callback(self, cb): self._hotkey_cb = cb
-    def _show_hotkey_recorder(self): _notify("Wispr", "Hotkey recorder needs GUI — use `wisprflow config --hotkey f9`", "critical")
+    def _show_hotkey_recorder(self): _notify("Wispr", "Hotkey recorder needs GUI — use `wisprflow config --hotkey ctrl+shift`", "critical")
     def show_idle(self): 
         if self.enabled:
-            _notify("Wispr — Ready", "Click pill or press F9 to talk")
+            _notify("Wispr — Ready", "Click pill or press Ctrl+Shift to talk")
     def show_listening(self, seconds=0): 
         if self.enabled:
             _notify("Wispr — Listening…", "Click again to stop")
@@ -238,7 +238,7 @@ class Overlay:
             lbl.set_halign(Gtk.Align.START)
             lbl.set_ellipsize(Pango.EllipsizeMode.END)
             lbl.set_max_width_chars(28)
-            sub = Gtk.Label(label="F9  •  Drag to move")
+            sub = Gtk.Label(label="Ctrl+Shift  •  Drag to move")
             sub.set_name("sub")
             sub.set_halign(Gtk.Align.START)
             sub.set_ellipsize(Pango.EllipsizeMode.END)
@@ -459,7 +459,7 @@ class Overlay:
     def _get_current_hotkey_display(self):
         try:
             from .config import load_config
-            hk = (load_config().get("hotkey") or "f9").strip()
+            hk = (load_config().get("hotkey") or "ctrl+shift").strip()
             # pretty: ctrl+shift -> Ctrl+Shift, f9 -> F9
             parts = hk.split("+")
             pretty = "+".join(p.capitalize() if p.lower().startswith("f") else p.capitalize() for p in parts)
@@ -467,7 +467,7 @@ class Overlay:
             pretty = pretty.replace("Ctrl", "Ctrl").replace("Shift", "Shift").replace("Alt", "Alt").replace("Super", "Super")
             return hk, pretty
         except Exception:
-            return "f9", "F9"
+            return "ctrl+shift", "Ctrl+Shift"
 
     def _gtk_event_to_hotkey(self, event):
         """Convert Gdk key-press event to config hotkey string like 'ctrl+shift', 'f9', 'ctrl+alt+space'."""
@@ -556,7 +556,7 @@ class Overlay:
 
     def _show_hotkey_recorder(self):
         if not HAS_GTK or not self.enabled or self._window is None:
-            _notify("Wispr", "Hotkey recorder needs GUI — use `wisprflow config --hotkey f9`", "critical")
+            _notify("Wispr", "Hotkey recorder needs GUI — use `wisprflow config --hotkey ctrl+shift`", "critical")
             return
         # avoid duplicate dialogs
         if self._hotkey_dialog is not None:

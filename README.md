@@ -2,11 +2,13 @@
 
 A lightweight, WisprFlow-like push-to-talk speech-to-text app for Ubuntu/Linux — press a key, speak, press again, and text appears at your cursor.
 
+This is an independent community project and is not affiliated with Wispr Flow.
+
 Powered by [OpenRouter](https://openrouter.ai) — bring your own API key and use any STT model (default `openai/gpt-4o-transcribe`).
 
 ## Features
 
-- **Push-to-toggle** global hotkey (default `F9`) — press once to start, again to stop & transcribe
+- **Push-to-toggle** global hotkey (default `Ctrl+Shift`) — press once to start, again to stop & transcribe
 - **Works where you type** — auto-pastes into the focused app via clipboard + `Ctrl+V` simulation
 - **OpenRouter STT** — uses `POST /audio/transcriptions` with base64 audio (JSON), supports `openai/gpt-4o-transcribe` and friends
 - **Floating overlay** — shows Listening / Transcribing / Done states
@@ -33,10 +35,10 @@ wisprflow daemon &
 
 # 4. Bind a GNOME shortcut to `wisprflow toggle` (recommended for Wayland/GNOME)
 #   Settings → Keyboard → View and Customize Shortcuts → Custom Shortcuts → +
-#   Name: Wispr Toggle   Command: /home/carlren/.local/bin/wisprflow toggle   Shortcut: F9
+#   Name: Wispr Toggle   Command: wisprflow toggle   Shortcut: Ctrl+Shift
 ```
 
-Now press `F9`, speak, press `F9` again — text appears at cursor.
+Now press `Ctrl+Shift`, speak, then press it again — text appears at your cursor.
 
 ## Installation (manual)
 
@@ -82,7 +84,7 @@ Example `config.json`:
   "api_key": "sk-or-v1-...",
   "model": "openai/gpt-4o-transcribe",
   "language": null,
-  "hotkey": "f9",
+  "hotkey": "ctrl+shift",
   "sample_rate": 16000,
   "channels": 1,
   "auto_paste": true,
@@ -147,9 +149,11 @@ rm -rf ~/.config/wisprflow ~/.cache/wisprflow
 
 ## Security
 
-- API key stored 600 perms, never logged.
+- The API key is read at runtime from `~/.config/wisprflow/config.json` or
+  `OPENROUTER_API_KEY`; it is not part of the source tree. The config file is
+  stored with user-only (`0600`) permissions.
 - Audio is base64-sent to OpenRouter only when you toggle-stop; temp WAVs are deleted.
 
 ## License
 
-MIT
+[MIT](LICENSE)
