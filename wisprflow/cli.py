@@ -138,7 +138,8 @@ def cmd_stop(args):
 def cmd_status(args):
     cfg = load_config()
     print(f"Config: {CONFIG_PATH}  exists={CONFIG_PATH.exists()}")
-    print(f"  model: {cfg.get('model')}")
+    print(f"  backend: {cfg.get('backend')}  model: {cfg.get('model')}")
+    print(f"  local_url: {cfg.get('local_url') or '(not set)'}  local_model: {cfg.get('local_model')}")
     print(f"  hotkey: {cfg.get('hotkey')}")
     print(f"  api_key: {redact_key(cfg.get('api_key',''))}")
     print(f"  language: {cfg.get('language')}")
@@ -171,6 +172,18 @@ def cmd_config(args):
         updates["api_key"] = args.api_key.strip()
     if args.model is not None:
         updates["model"] = args.model.strip()
+    if args.backend is not None:
+        backend = args.backend.strip().lower()
+        if backend not in ("openrouter", "local"):
+            print(f"Invalid backend {backend!r}: choose 'openrouter' or 'local'.", file=sys.stderr)
+            return 1
+        updates["backend"] = backend
+    if args.local_url is not None:
+        updates["local_url"] = args.local_url.strip()
+    if args.local_model is not None:
+        updates["local_model"] = args.local_model.strip()
+    if args.prompt is not None:
+        updates["prompt"] = args.prompt.strip()
     if args.language is not None:
         # allow "auto" to clear
         if args.language.lower() in ("auto", "none", "null", ""):
@@ -212,6 +225,17 @@ def cmd_diagnose(args):
     print(f"Python: {sys.version.split()[0]}  exe={sys.executable}")
     print(f"Config: {CONFIG_PATH} exists={CONFIG_PATH.exists()}")
     print(f"  api_key: {redact_key(cfg.get('api_key',''))}  model={cfg.get('model')}  lang={cfg.get('language')}  hotkey={cfg.get('hotkey')}")
+    print(f"  backend: {cfg.get('backend')}  local_url={cfg.get('local_url') or '(not set)'}  local_model={cfg.get('local_model')}")
+    local_url = (cfg.get("local_url") or "").strip().rstrip("/")
+    if local_url:
+        try:
+            import requests as _rq
+            r = _rq.get(local_url + "/v1/models", timeout=3)
+            # any HTTP response (even 404) means the server is up; some
+            # servers only implement /v1/audio/transcriptions
+            print(f"  local STT probe: reachable ({local_url} -> HTTP {r.status_code} on /v1/models)")
+        except Exception as e:
+            print(f"  local STT probe: UNREACHABLE ({type(e).__name__}: {e})")
     print(f"Env: XDG_SESSION_TYPE={os.environ.get('XDG_SESSION_TYPE')}  WAYLAND_DISPLAY={os.environ.get('WAYLAND_DISPLAY')}  DISPLAY={os.environ.get('DISPLAY')}")
     print(f"Session audio: PipeWire/Pulse? trying pactl/pipewire")
     for cmd in [["which", "xdotool"], ["which", "wtype"], ["which", "wl-copy"], ["which", "wl-paste"], ["which", "xclip"], ["which", "xsel"], ["which", "ydotool"], ["which", "arecord"], ["which", "parecord"]]:
@@ -302,9 +326,11 @@ def cmd_test_mic(args):
             print(f"  soundfile: sr={sr} shape={getattr(data, 'shape', len(data))} dur={len(data)/sr:.2f}s")
         except Exception as e:
             print(f"  soundfile read failed: {e}")
-        # optionally try transcription if key set
-        if cfg.get("api_key"):
-            print("Transcribing test with OpenRouter…")
+        # optionally try transcription if a backend is usable
+        backend = (cfg.get("backend") or "openrouter").lower()
+        can_transcribe = (backend == "local" and cfg.get("local_url")) or cfg.get("api_key")
+        if can_transcribe:
+            print(f"Transcribing test with backend={backend}…")
             try:
                 from .transcriber import transcribe
                 text = transcribe(path, cfg)
@@ -312,7 +338,7 @@ def cmd_test_mic(args):
             except Exception as e:
                 print(f"  transcribe failed: {e}")
         else:
-            print("Skipping transcribe (no API key). Set with `wisprflow config --api-key ...`")
+            print("Skipping transcribe (no usable backend: set --api-key or --backend local --local-url ...).")
         # keep file for debug? delete
         try:
             os.unlink(path)
@@ -389,6 +415,10 @@ def build_parser():
     sp = sub.add_parser("config", help="configure")
     sp.add_argument("--api-key", dest="api_key", help="OpenRouter API key (sk-or-...)")
     sp.add_argument("--model", help="STT model, e.g. openai/gpt-4o-transcribe")
+    sp.add_argument("--backend", help="STT backend: openrouter or local")
+    sp.add_argument("--local-url", dest="local_url", help="local STT server base URL, e.g. http://127.0.0.1:18780")
+    sp.add_argument("--local-model", dest="local_model", help="model id to request from the local server")
+    sp.add_argument("--prompt", help="optional vocabulary/style prompt sent to the STT backend")
     sp.add_argument("--language", help="language code (en, fr… or 'auto')")
     sp.add_argument("--hotkey", help="hotkey like f9, ctrl+shift+space")
     sp.add_argument("--paste-mode", dest="paste_mode", help="paste mode: auto (detect terminal vs GUI), gui=Ctrl+V, terminal=Ctrl+Shift+V/Shift+Insert, primary=Shift+Insert")
@@ -491,7 +521,7 @@ def build_parser():
         return 0
     sp.set_defaults(func=_listen_keys)
 
-    sp = sub.add_parser("retry-pending", help="retry queued audio when back online (failed OpenRouter calls)")
+    sp = sub.add_parser("retry-pending", help="retry queued audio when back online (failed transcription calls)")
     def _retry_pending(args):
         pending = CACHE_DIR / "pending"
         if not pending.exists() or not any(pending.iterdir()):
@@ -508,7 +538,9 @@ def build_parser():
         ok_cnt = 0
         fail_cnt = 0
         for wav in files:
-            print(f"  {wav.name} ({wav.stat().st_size} bytes) -> {cfg.get('model')} ...", end=" ", flush=True)
+            _backend = (cfg.get("backend") or "openrouter").strip().lower()
+            _mlabel = (cfg.get("local_model") if _backend == "local" else cfg.get("model")) or _backend
+            print(f"  {wav.name} ({wav.stat().st_size} bytes) -> [{_backend}] {_mlabel} ...", end=" ", flush=True)
             try:
                 text = transcribe(str(wav), cfg)
                 print(f"-> {text!r}")

@@ -52,9 +52,9 @@ class OverlayFallback:
     def show_listening(self, seconds=0): 
         if self.enabled:
             _notify("Wispr — Listening…", "Click again to stop")
-    def show_transcribing(self): 
+    def show_transcribing(self):
         if self.enabled:
-            _notify("Wispr — Transcribing…", "Sending to OpenRouter")
+            _notify("Wispr — Transcribing…", f"Sending to {_backend_display_name()}")
     def show_done(self, text=""):
         if self.enabled:
             snippet = text[:80] + ("…" if len(text) > 80 else "")
@@ -70,6 +70,19 @@ def _notify(title, body, urgency="normal"):
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
+
+def _backend_display_name():
+    """Short human label for the active transcription backend, e.g. 'OpenRouter gpt-4o-transcribe'."""
+    try:
+        from .config import load_config
+        cfg = load_config()
+        if (cfg.get("backend") or "openrouter").strip().lower() == "local":
+            m = (cfg.get("local_model") or "").split("/")[-1] or "local model"
+            return f"local {m}"
+        m = (cfg.get("model") or "").split("/")[-1] or "OpenRouter"
+        return f"OpenRouter {m}"
+    except Exception:
+        return "OpenRouter"
 
 def _load_position():
     try:
@@ -401,6 +414,54 @@ class Overlay:
             mi_status.set_sensitive(False)
             menu.append(mi_status)
             menu.append(Gtk.SeparatorMenuItem())
+            # Backend switcher: OpenRouter <-> local (takes effect on next recording;
+            # the daemon reloads config at the start of every recording)
+            mi_backend = Gtk.MenuItem(label="Transcription backend")
+            backend_sub = Gtk.Menu()
+            try:
+                from .config import load_config, save_config
+                _bcfg = load_config()
+                _cur = (_bcfg.get("backend") or "openrouter").strip().lower()
+                _or_label = "OpenRouter — " + ((_bcfg.get("model") or "").split("/")[-1] or "gpt-4o-transcribe")
+                _local_model = (_bcfg.get("local_model") or "").split("/")[-1] or "local model"
+                _local_url = (_bcfg.get("local_url") or "").strip()
+                _local_label = f"Local — {_local_model}" + ("" if _local_url else " (no URL set)")
+            except Exception:
+                _cur, _or_label, _local_label, _local_url = "openrouter", "OpenRouter", "Local", ""
+            _sync = {"v": False}
+            _bitems = {}
+            def _make_backend_item(_key, _label):
+                it = Gtk.CheckMenuItem(label=_label)
+                it.set_draw_as_radio(True)
+                it.set_active(_key == _cur)
+                def _on_toggled(w, _k=_key, _l=_label):
+                    if _sync["v"] or not w.get_active():
+                        return
+                    _sync["v"] = True
+                    try:
+                        for _kk, _other in _bitems.items():
+                            if _kk != _k:
+                                _other.set_active(False)
+                        save_config({"backend": _k})
+                        if _k == "local" and not _local_url:
+                            _notify("Wispr — Backend: local",
+                                    "Switched, but no local URL is set — run: wisprflow config --local-url http://127.0.0.1:PORT",
+                                    "critical")
+                        else:
+                            _notify("Wispr — Backend switched",
+                                    f"Now using {_l}. Takes effect on the next recording.")
+                    except Exception as e:
+                        _notify("Wispr — Error", f"Failed to switch backend: {e}", "critical")
+                    finally:
+                        _sync["v"] = False
+                it.connect("toggled", _on_toggled)
+                _bitems[_key] = it
+                return it
+            backend_sub.append(_make_backend_item("openrouter", _or_label))
+            backend_sub.append(_make_backend_item("local", _local_label))
+            mi_backend.set_submenu(backend_sub)
+            menu.append(mi_backend)
+            menu.append(Gtk.SeparatorMenuItem())
             # Change hotkey — record your own combo
             _, pretty = self._get_current_hotkey_display()
             mi_hotkey = Gtk.MenuItem(label=f"Change hotkey…  (now {pretty})")
@@ -446,13 +507,19 @@ class Overlay:
         return False
 
     def _get_model_name(self):
+        # Shows the active backend, e.g. "local:qwen3-asr-1.7b" or "openrouter:gpt-4o-transcribe".
         try:
             from .config import load_config
-            m = load_config().get("model", "")
-            # shorten openai/gpt-4o-transcribe -> gpt-4o
+            cfg = load_config()
+            backend = (cfg.get("backend") or "openrouter").strip().lower()
+            if backend == "local":
+                m = cfg.get("local_model", "") or ""
+            else:
+                m = cfg.get("model", "") or ""
+            # shorten openai/gpt-4o-transcribe -> gpt-4o-transcribe
             if "/" in m:
                 m = m.split("/")[-1]
-            return m
+            return f"{backend}:{m}" if m else backend
         except Exception:
             return ""
 
@@ -835,7 +902,7 @@ class Overlay:
             if self._label:
                 self._label.set_text("Transcribing…")
             if self._sub:
-                self._sub.set_text("Sending to OpenRouter")
+                self._sub.set_text(f"Sending to {_backend_display_name()}")
             if self._dot_holder:
                 self._dot_holder.show()
             if self._spinner:
