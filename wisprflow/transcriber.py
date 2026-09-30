@@ -1,11 +1,14 @@
 """
-Transcriber: OpenRouter /audio/transcriptions (JSON base64) + fallback.
+Transcriber: OpenRouter /audio/transcriptions (JSON base64) + local OpenAI-compatible server.
 
-Primary:  POST https://openrouter.ai/api/v1/audio/transcriptions
-  JSON: { model, input_audio:{data:base64, format}, language?, temperature? }
-  Response: { text, usage? }
-
-Fallback: OpenAI-compatible multipart POST to same endpoint for servers that expect multipart.
+Backends (cfg["backend"]):
+  openrouter: POST https://openrouter.ai/api/v1/audio/transcriptions
+    JSON: { model, input_audio:{data:base64, format}, language?, temperature?, prompt? }
+    Response: { text, usage? }
+    Fallback: OpenAI-compatible multipart POST to same endpoint.
+  local: POST {local_url}/v1/audio/transcriptions
+    multipart (OpenAI Whisper style): file, model, language?, prompt?
+    Response: { text }
 We also support generic OpenAI endpoint via config http_referer/x_title headers.
 """
 import base64
@@ -43,7 +46,7 @@ def _headers(api_key: str, cfg: dict):
         h["X-Title"] = cfg["x_title"]
     return h
 
-def transcribe_openrouter(wav_path: str, api_key: str, model: str, language=None, temperature=None, cfg=None) -> str:
+def transcribe_openrouter(wav_path: str, api_key: str, model: str, language=None, temperature=None, prompt=None, cfg=None) -> str:
     cfg = cfg or {}
     fmt = _detect_format(wav_path)
     with open(wav_path, "rb") as f:
@@ -63,6 +66,8 @@ def transcribe_openrouter(wav_path: str, api_key: str, model: str, language=None
         payload["language"] = language
     if temperature is not None:
         payload["temperature"] = temperature
+    if prompt:
+        payload["prompt"] = prompt
 
     headers = _headers(api_key, cfg)
 
@@ -116,6 +121,8 @@ def transcribe_openrouter(wav_path: str, api_key: str, model: str, language=None
                     data_form["language"] = language
                 if temperature is not None:
                     data_form["temperature"] = str(temperature)
+                if prompt:
+                    data_form["prompt"] = prompt
                 # need to re-read? requests will stream
                 resp2 = requests.post(OPENROUTER_URL, headers=headers, files=files, data=data_form, timeout=TIMEOUT)
             if resp2.status_code == 200:
@@ -139,13 +146,86 @@ def transcribe_openrouter(wav_path: str, api_key: str, model: str, language=None
         raise RuntimeError(f"Rate limited (429). Body: {err_text}")
     raise RuntimeError(f"Transcription failed {resp.status_code}: {err_text}")
 
+LOCAL_TIMEOUT = 120  # local GPU inference can take longer on first (warmup) call
+
+def transcribe_local(wav_path: str, base_url: str, model: str, language=None, prompt=None, cfg=None) -> str:
+    """Transcribe via a local OpenAI-compatible STT server.
+
+    POST {base_url}/v1/audio/transcriptions  (multipart, like OpenAI Whisper API)
+    Response: {"text": "..."} — servers that don't know a field simply ignore it.
+    """
+    cfg = cfg or {}
+    base_url = (base_url or "").strip().rstrip("/")
+    if not base_url:
+        raise RuntimeError(
+            "Local backend selected but local_url is not set. "
+            "Run `wisprflow config --local-url http://127.0.0.1:PORT` first."
+        )
+    if not os.path.exists(wav_path) or os.path.getsize(wav_path) == 0:
+        raise RuntimeError("Empty or missing audio file")
+    url = base_url + "/v1/audio/transcriptions"
+
+    resp = None
+    for attempt in range(3):
+        try:
+            with open(wav_path, "rb") as f:
+                files = {"file": (os.path.basename(wav_path), f, "audio/wav")}
+                data_form = {"model": model}
+                if language:
+                    data_form["language"] = language
+                if prompt:
+                    data_form["prompt"] = prompt
+                resp = requests.post(url, files=files, data=data_form, timeout=LOCAL_TIMEOUT)
+            break
+        except requests.RequestException as e:
+            if attempt < 2:
+                wait = 1.0 * (2 ** attempt)
+                print(f"[wispr] local STT network error (attempt {attempt+1}/3): {e} — retrying in {wait:.1f}s")
+                time.sleep(wait)
+                continue
+            raise RuntimeError(
+                f"Network error contacting local STT at {url} after {attempt+1} attempts: {e} "
+                f"(is the local service running? check `wisprflow diagnose`)"
+            ) from e
+    if resp is None:
+        raise RuntimeError(f"No response from local STT at {url}")
+
+    if resp.status_code == 200:
+        try:
+            j = resp.json()
+        except Exception as e:
+            raise RuntimeError(f"Local STT returned non-JSON 200: {resp.text[:500]!r}") from e
+        text = j.get("text")
+        if text is None:
+            raise RuntimeError(f"Unexpected local STT response shape: {j}")
+        return text.strip()
+
+    err_text = ""
+    try:
+        err_text = resp.text[:2000]
+    except Exception:
+        pass
+    if resp.status_code in (401, 403):
+        raise RuntimeError(f"Local STT auth failed ({resp.status_code}). Body: {err_text}")
+    raise RuntimeError(f"Local transcription failed {resp.status_code}: {err_text}")
+
 def transcribe(wav_path: str, cfg: dict) -> str:
+    backend = (cfg.get("backend") or "openrouter").strip().lower()
+    lang = cfg.get("language")
+    if lang == "":
+        lang = None
+    prompt = (cfg.get("prompt") or "").strip() or None
+
+    if backend == "local":
+        model = cfg.get("local_model") or "qwen3-asr-1.7b"
+        return transcribe_local(wav_path, cfg.get("local_url"), model, language=lang, prompt=prompt, cfg=cfg)
+
+    if backend != "openrouter":
+        raise RuntimeError(f"Unknown backend {backend!r}: choose 'openrouter' or 'local' (`wisprflow config --backend ...`).")
+
     api_key = (cfg.get("api_key") or "").strip() or os.environ.get("OPENROUTER_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("Missing OpenRouter API key. Run `wisprflow config --api-key sk-or-...` or set OPENROUTER_API_KEY.")
     model = cfg.get("model") or "openai/gpt-4o-transcribe"
-    lang = cfg.get("language")
-    if lang == "":
-        lang = None
     temp = cfg.get("temperature")
-    return transcribe_openrouter(wav_path, api_key, model, language=lang, temperature=temp, cfg=cfg)
+    return transcribe_openrouter(wav_path, api_key, model, language=lang, temperature=temp, prompt=prompt, cfg=cfg)

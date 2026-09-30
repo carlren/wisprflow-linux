@@ -18,7 +18,11 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 
 DEFAULT_CONFIG = {
     "api_key": "",
+    "backend": "openrouter",  # openrouter | local — which STT service to use
     "model": DEFAULT_MODEL,
+    "local_url": "http://127.0.0.1:18780",  # base URL of local STT server (Qwen3-ASR systemd service)
+    "local_model": "qwen3-asr-1.7b",  # model id to request from the local server
+    "prompt": "",             # optional vocabulary/style prompt sent to both backends
     "language": None,          # ISO 639-1 or None for auto
     "hotkey": DEFAULT_HOTKEY,
     "sample_rate": 16000,
