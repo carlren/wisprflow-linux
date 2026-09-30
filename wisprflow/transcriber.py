@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 import requests
 
+from .disfluency import build_local_prompt, clean_disfluencies
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/audio/transcriptions"
 TIMEOUT = 60
 
@@ -214,14 +216,19 @@ def transcribe(wav_path: str, cfg: dict) -> str:
     lang = cfg.get("language")
     if lang == "":
         lang = None
-    prompt = (cfg.get("prompt") or "").strip() or None
 
     if backend == "local":
         model = cfg.get("local_model") or "qwen3-asr-1.7b"
-        return transcribe_local(wav_path, cfg.get("local_url"), model, language=lang, prompt=prompt, cfg=cfg)
+        prompt = build_local_prompt(cfg)
+        text = transcribe_local(wav_path, cfg.get("local_url"), model, language=lang, prompt=prompt, cfg=cfg)
+        if cfg.get("disfluency_filter", True):
+            text = clean_disfluencies(text)
+        return text
 
     if backend != "openrouter":
         raise RuntimeError(f"Unknown backend {backend!r}: choose 'openrouter' or 'local' (`wisprflow config --backend ...`).")
+
+    prompt = (cfg.get("prompt") or "").strip() or None
 
     api_key = (cfg.get("api_key") or "").strip() or os.environ.get("OPENROUTER_API_KEY", "").strip()
     if not api_key:

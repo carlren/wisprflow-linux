@@ -23,6 +23,9 @@ DEFAULT_CONFIG = {
     "local_url": "http://127.0.0.1:18780",  # base URL of local STT server (Qwen3-ASR systemd service)
     "local_model": "qwen3-asr-1.7b",  # model id to request from the local server
     "prompt": "",             # optional vocabulary/style prompt sent to both backends
+    "vocab": "Hanna, Tailscale, rsync, UGREEN, Weee, Beni, PledgeBox, Qwen, systemd, Qwen3-ASR",
+    # ^ comma-separated vocabulary hints baked into the local STT prompt (exact spellings)
+    "disfluency_filter": True,  # regex cleanup of filler words/repetitions on local backend
     "language": None,          # ISO 639-1 or None for auto
     "hotkey": DEFAULT_HOTKEY,
     "sample_rate": 16000,

@@ -184,6 +184,10 @@ def cmd_config(args):
         updates["local_model"] = args.local_model.strip()
     if args.prompt is not None:
         updates["prompt"] = args.prompt.strip()
+    if args.vocab is not None:
+        updates["vocab"] = args.vocab.strip()
+    if args.disfluency_filter is not None:
+        updates["disfluency_filter"] = bool(args.disfluency_filter)
     if args.language is not None:
         # allow "auto" to clear
         if args.language.lower() in ("auto", "none", "null", ""):
@@ -419,6 +423,7 @@ def build_parser():
     sp.add_argument("--local-url", dest="local_url", help="local STT server base URL, e.g. http://127.0.0.1:18780")
     sp.add_argument("--local-model", dest="local_model", help="model id to request from the local server")
     sp.add_argument("--prompt", help="optional vocabulary/style prompt sent to the STT backend")
+    sp.add_argument("--vocab", help="comma-separated vocabulary hints for the local STT prompt (exact spellings)")
     sp.add_argument("--language", help="language code (en, fr… or 'auto')")
     sp.add_argument("--hotkey", help="hotkey like f9, ctrl+shift+space")
     sp.add_argument("--paste-mode", dest="paste_mode", help="paste mode: auto (detect terminal vs GUI), gui=Ctrl+V, terminal=Ctrl+Shift+V/Shift+Insert, primary=Shift+Insert")
@@ -429,6 +434,11 @@ def build_parser():
     grp2 = sp.add_mutually_exclusive_group()
     grp2.add_argument("--sound", action="store_true", help="enable sounds")
     grp2.add_argument("--no-sound", action="store_true", help="disable sounds")
+    grp3 = sp.add_mutually_exclusive_group()
+    grp3.add_argument("--disfluency-filter", dest="disfluency_filter", action="store_true", default=None,
+                      help="enable filler-word cleanup on the local backend")
+    grp3.add_argument("--no-disfluency-filter", dest="disfluency_filter", action="store_false", default=None,
+                      help="disable filler-word cleanup on the local backend")
     sp.set_defaults(func=cmd_config)
 
     sp = sub.add_parser("diagnose", help="check system deps")
